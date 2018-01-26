@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="trajectory_visualizer" default="false" />
+
+  <!-- Launch node -->
+  <node name="robot_wrapper" pkg="robot_wrapper" type="robot_wrapper.py" respawn="false" output="screen" >
+    <!-- Load parameters -->
+    <rosparam command="load" file="$(find robot_wrapper)/yaml/robot_interface.yaml" />
+    <rosparam command="load" file="$(find robot_wrapper)/yaml/receiver.yaml" />
+    <rosparam command="load" file="$(find robot_wrapper)/yaml/transmitter.yaml" />
+  </node>
+
+  <!-- Launch trajectory visualizer, if necessary -->
+  <node name="rob_trajectory_vis" pkg="robot_wrapper" type="show_trajectory.py" respawn="true" output="screen" if="$(arg trajectory_visualizer)" />
+
+</launch>

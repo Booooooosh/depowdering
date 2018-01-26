@@ -1,0 +1,6 @@
+# point cloud name (must be resided within data folder)
+string name
+---
+# successfull?
+bool success
+string reason

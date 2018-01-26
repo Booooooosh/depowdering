@@ -1,0 +1,14 @@
+roi:
+  x: [-0.21, 0.25]
+  y: [-0.25, 0.2]
+  z: [1.5, 1.8]
+resolution:
+  x: 15.0
+  y: 15.0
+end_effector:
+  offset: 5.0
+
+ros_node:
+  sub_topic_name: '/kinect_feedback/point_cloud'
+  pub_topic_name: 'robot_trajectory'
+  target_frame: 'robot_work_frame'

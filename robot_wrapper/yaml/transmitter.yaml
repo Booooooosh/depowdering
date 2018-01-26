@@ -1,0 +1,4 @@
+rws_ip_addr: '128.237.185.130'
+rws_port: 8081
+rws_thread_timeout: 60.0
+rws_event_timeout: 5.0

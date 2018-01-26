@@ -1,0 +1,7 @@
+# Cycle Done: indicate that this cycle is done!
+bool cycle_done
+---
+# Success: TRUE if frame is successfully delievered.
+# Reason: detail of error if not succeeded.
+bool success
+string reason

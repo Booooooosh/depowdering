@@ -1,0 +1,221 @@
+/*
+ * Copyright @ CERLAB
+ * This header includes PCL headers and the
+ * class structure for various functionalities
+ * for the blackbox
+ */
+
+#ifndef _PCL_SKELETON_H
+#define _PCL_SKELETON_H
+
+// PCL headers
+#include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/PolygonMesh.h>
+
+#include <pcl/ModelCoefficients.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
+
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
+
+#include <pcl/keypoints/harris_3d.h>
+
+#include <pcl/filters/passthrough.h>
+#include <pcl/visualization/pcl_visualizer.h>
+
+// pthread header
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+// system header
+#include <vector>
+
+// user_defined header
+#include <processor_const.h>
+
+/* Class @ BlackboxProcessor
+ * This class includes most of the
+ * functionalities provided by Blackbox
+ */
+class BlackboxProcessor {
+  typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+  typedef void * (*THREADFUNCPTR)(void *);
+
+ public:
+  enum KeyPointType {
+    HARRIS_3D = 0,
+  };
+
+ private:
+  pthread_t visualization_thread;
+  sem_t point_cloud_resources;
+  bool visual_terminate, visual_start;
+
+  std::vector<PointCloud::Ptr> pipeline;
+  PointCloud::Ptr model_cloud;
+
+  std::vector<PointCloud::Ptr> potential_objects;
+  std::vector<pcl::PointIndices> potential_obj_index;
+  std::vector<PointCloud::Ptr> potential_keypoints;
+  std::vector<pcl::PointIndices> potential_keypoints_index;
+
+  int seq;
+  // grid ALG resolution
+  float resX, resY;
+  // ROI region
+  float lowerX, upperX, lowerY, upperY, lowerZ, upperZ;
+  // rigid transformation (camera --> robot/work)
+  float transX, transY, transZ ,linearX, linearY, linearZ;
+  Eigen::Affine3f transform2robot;
+
+  /* Function @ ClearPrevious
+   * clear previously processed data
+   */
+  void ClearPrevious(void);
+  /*
+   * Function @ vec2pcl
+   * transfer points from vector to point cloud
+   * structure
+   */
+  int vec2pcl(std::vector<float> &vec, int dim, int width, int height, PointCloud::Ptr cloud);
+  /*
+   * Function @ pcl2vec
+   * transfer points from point cloud structure
+   * to vector
+   */
+  int pcl2vec(PointCloud::Ptr cloud, std::vector<float> &vec);
+  /*
+   * Function @ pcl_passthrough
+   * pass through filter used for setting ROI
+   */
+  PointCloud::Ptr pcl_passthrough(PointCloud::Ptr cloud);
+  /*
+   * Function @ pcl_plane_seg
+   * perform a plane segmentation
+   */
+  PointCloud::Ptr pcl_plane_seg(PointCloud::Ptr cloud);
+  void pcl_euclidean_extraction(PointCloud::Ptr cloud);
+  /*
+   * Function @ keypoints
+   * extract keypoints of an object
+   */
+  PointCloud::Ptr keypoints(PointCloud::Ptr cloud, unsigned int method);
+  void compute_keypoints(std::vector<PointCloud::Ptr> &sub_clouds, unsigned int method);
+  /*
+   * Function @ pcl_transform
+   * transform the pointcloud into another coordinate system
+   */
+  PointCloud::Ptr pcl_transform(PointCloud::Ptr cloud);
+  /*
+   * Function @ save_point_cloud
+   * save the point cloud to current dir
+   */
+  void save_point_cloud(PointCloud::Ptr cloud);
+  void keyboard_event_occurred(const pcl::visualization::KeyboardEvent &event, void *viewerHd);
+  /*
+   * Function @ pcl_visualize
+   * visualize the frame that just processed
+   */
+  void *pcl_visualize(void);
+  /*
+   * Function @ path_from_grid
+   * generate path using simple grid method
+   */
+  bool path_from_grid(PointCloud::Ptr cloud, std::vector<float> &trajectory,
+                        float resX = RES_X, float resY = RES_Y);
+ public:
+  /* Constructor(s) */
+  BlackboxProcessor() {
+    this->visual_terminate = false;
+    this->visual_start = false;
+
+    this->pipeline.clear();
+    this->model_cloud = PointCloud::Ptr(new PointCloud);
+
+    this->potential_objects.clear();
+    this->potential_obj_index.clear();
+    this->potential_keypoints.clear();
+    this->potential_keypoints_index.clear();
+
+    this->seq = 0;
+
+    this->resX = RES_X; this->resY = RES_Y;
+    this->lowerX = BOUNDARY_LOW_X;
+    this->upperX = BOUNDARY_HIGH_X;
+    this->lowerY = BOUNDARY_LOW_Y;
+    this->upperY = BOUNDARY_HIGH_Y;
+    this->lowerZ = BOUNDARY_LOW_Z;
+    this->upperZ = BOUNDARY_HIGH_Z;
+
+    this->transX = TF_TRANS_X;
+    this->transY = TF_TRANS_Y;
+    this->transZ = TF_TRANS_Z;
+    this->linearX = TF_ROTATE_X;
+    this->linearY = TF_ROTATE_Y;
+    this->linearZ = TF_ROTATE_Z;
+    this->transform2robot = Eigen::Affine3f::Identity();
+  }
+  /* Destructor */
+  ~BlackboxProcessor() {
+    if (this->visual_start) {
+      // join the thread
+      this->visual_terminate = true;
+      pthread_join(this->visualization_thread, NULL);
+      sem_destroy(&this->point_cloud_resources);
+      this->visual_start = false;
+    }
+  }
+  /*
+   * Function @ Hello
+   * call this function to test out the boost-python
+   */
+  std::string Hello(void);
+  /*
+   * Function @ ImportMesh
+   * import mesh of the 3d printed part and transfer
+   * it into point cloud
+   */
+  bool ImportMesh(std::string path);
+  /*
+   * Function @ Process
+   * main process function
+   */
+  std::vector<float> Process(std::vector<float> points,
+                             int dim,
+                             int width, int height);
+  /*
+   * Function @ Visualize
+   * wrapper function to visualize the previous
+   * input point cloud
+   */
+  bool StartVisualization(void);
+  /*
+   * Function @ SetResolution
+   * set resolution in X and Y direction when using grid
+   * to process the point cloud
+   */
+  void SetResolution(float res_x, float res_y);
+  /*
+   * Function @ SetROI
+   * set the region of interest of the point cloud
+   */
+  void SetROI(float lower_x, float upper_x,
+              float lower_y, float upper_y,
+              float lower_z, float upper_z);
+  /*
+   * Function @ SetTransformMatrix
+   * set the transformation matrix b/w camera frame
+   * and the robot/work frame
+   */
+  void SetTransformMatrix(float trans_x, float trans_y, float trans_z,
+                            float linear_x, float linear_y, float linear_z);
+};
+
+#endif

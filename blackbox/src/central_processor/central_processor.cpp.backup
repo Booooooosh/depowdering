@@ -1,0 +1,409 @@
+/*
+ * Copyright @ CERLAB
+ * This file is a skeleton of a PCL implementation
+ * that can work with the python script
+ */
+
+// Boost.Python headers
+#include <boost/python.hpp>
+#include <boost/python/suite/indexing/indexing_suite.hpp>
+#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
+
+// system level header
+#include <time.h>
+
+#include <central_processor.h>
+
+using namespace boost::python;
+
+void BlackboxProcessor::ClearPrevious(void) {
+  this->pipeline.clear();
+  this->potential_objects.clear();
+  this->potential_obj_index.clear();
+  this->potential_keypoints.clear();
+  this->potential_keypoints_index.clear();
+  return;
+}
+
+int BlackboxProcessor::vec2pcl(std::vector<float> &vec, int dim, int width, int height, PointCloud::Ptr cloud) {
+  // check the size of the point cloud
+  int raw_size = vec.size();
+  if (raw_size == 0 || raw_size % dim != 0) {
+    printf("[C++|vec2pcl] Input point cloud has invalid size.\n");
+    return -1;
+  }
+  for (int cloud_index = 0; cloud_index < raw_size; cloud_index += dim) {
+    // push points into pcl structure
+    pcl::PointXYZ point(vec[cloud_index], vec[cloud_index + 1], vec[cloud_index + 2]);
+    cloud->push_back(point);
+  }
+  // set the width and height for pcl
+  cloud->width = width;
+  cloud->height = height;
+  cloud->is_dense = true;
+
+  return (raw_size / dim);
+}
+
+int BlackboxProcessor::pcl2vec(PointCloud::Ptr cloud, std::vector<float> &vec) {
+  // check the size of the point cloud
+  int cloud_size = cloud->size();
+  if (cloud_size <= 0) {
+    printf("[C++|pcl2vec] Input point cloud has invalid size.\n");
+    return -1;
+  }
+  for (PointCloud::iterator it = cloud->begin(); it != cloud->end(); ++ it) {
+    // X, Y, Z
+    vec.push_back(it->x);
+    vec.push_back(it->y);
+    vec.push_back(it->z);
+    // R, P, Y
+    // vec.push_back(0.0);
+    // vec.push_back(0.0);
+    // vec.push_back(0.0);
+  }
+  return cloud_size;
+}
+
+
+BlackboxProcessor::PointCloud::Ptr BlackboxProcessor::pcl_passthrough(PointCloud::Ptr cloud) {
+  if (cloud->size() <= 0) {
+    printf("[C++|pcl_passthrough] Empty point cloud received.");
+    return PointCloud::Ptr();
+  }
+
+  PointCloud::Ptr filteredZ(new PointCloud), filteredZY(new PointCloud);
+  PointCloud::Ptr processed(new PointCloud);
+  pcl::PassThrough<pcl::PointXYZ> passthrough;
+  // filter Z-axis
+  passthrough.setInputCloud(cloud);
+  passthrough.setFilterFieldName("z");
+  passthrough.setFilterLimits(this->lowerZ, this->upperZ);
+  passthrough.filter(*filteredZ);
+  // filter Y-axis
+  passthrough.setInputCloud(filteredZ);
+  passthrough.setFilterFieldName("y");
+  passthrough.setFilterLimits(this->lowerY, this->upperY);
+  passthrough.filter(*filteredZY);
+  // filter X-axis
+  passthrough.setInputCloud(filteredZY);
+  passthrough.setFilterFieldName("x");
+  passthrough.setFilterLimits(this->lowerX, this->upperX);
+  passthrough.filter(*processed);
+
+  return processed;
+}
+
+BlackboxProcessor::PointCloud::Ptr BlackboxProcessor::pcl_plane_seg(PointCloud::Ptr cloud) {
+  // check the validness of the model
+  if (cloud->size() == 0) {
+    printf("[C++|pcl_plane_seg] Invalid input cloud!\n");
+    return cloud;
+  }
+
+  pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+  pcl::SACSegmentation<pcl::PointXYZ> seg;
+
+  seg.setOptimizeCoefficients(true);
+  seg.setModelType(pcl::SACMODEL_PLANE);
+  seg.setMethodType(pcl::SAC_RANSAC);
+  seg.setDistanceThreshold(0.02);
+  Eigen::Vector3f estimated_normal = Eigen::Vector3f::UnitZ();
+  seg.setAxis(estimated_normal);
+  seg.setEpsAngle(0.349);
+
+  seg.setInputCloud(cloud);
+  seg.segment(*inliers, *coefficients);
+
+  if (inliers->indices.size() == 0) {
+    printf("[C++|pcl_plane_seg] WARNING! Not able to detect a plane.\n");
+    return cloud;
+  }
+
+  // extract data
+  PointCloud::Ptr plane_outliers(new PointCloud);
+  pcl::ExtractIndices<pcl::PointXYZ> extract;
+  extract.setInputCloud(cloud);
+  extract.setIndices(inliers);
+  extract.setNegative(true);
+  extract.filter(*plane_outliers);
+
+  return plane_outliers;
+}
+void BlackboxProcessor::pcl_euclidean_extraction(PointCloud::Ptr cloud) {
+  // set up a tree to perform the clustering
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+  tree->setInputCloud(cloud);
+
+  // perform the actual clustering
+  pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+  ec.setClusterTolerance(0.02);
+  ec.setMinClusterSize(100);
+  ec.setMaxClusterSize(25000);
+  ec.setSearchMethod(tree);
+  ec.setInputCloud(cloud);
+  ec.extract(this->potential_obj_index);
+
+  // save potential objects into the local vector
+  for (std::vector<pcl::PointIndices>::const_iterator it = this->potential_obj_index.begin (); it != this->potential_obj_index.end (); ++it) {
+    pcl::PointCloud<pcl::PointXYZ>::Ptr potential_object(new pcl::PointCloud<pcl::PointXYZ>);
+    for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit) {
+      potential_object->points.push_back(cloud->points[*pit]);
+    }
+    potential_object->width = potential_object->points.size();
+    potential_object->height = 1;
+    potential_object->is_dense = true;
+
+    this->potential_objects.push_back(potential_object);
+  }
+
+  return;
+}
+
+BlackboxProcessor::PointCloud::Ptr BlackboxProcessor::keypoints(PointCloud::Ptr cloud, unsigned int method) {
+  // prepare for the return value
+  PointCloud::Ptr keypoints_detected(new PointCloud);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_detected_temp(new pcl::PointCloud<pcl::PointXYZI>());
+
+  // which method are we using?
+  switch (method) {
+    case HARRIS_3D: {
+      pcl::HarrisKeypoint3D<pcl::PointXYZ, pcl::PointXYZI> harris3d;
+      harris3d.setNonMaxSupression(true);
+      harris3d.setInputCloud(cloud);
+      harris3d.setThreshold(1e-3);
+      harris3d.setRadius(0.02);
+      harris3d.setRefine(false);
+      harris3d.compute(*keypoints_detected_temp);
+
+      pcl::copyPointCloud(*keypoints_detected_temp, *keypoints_detected);
+    }break;
+    default: printf("[C++|keypoints] No corresponding methods.\n"); break;
+  }
+
+  return keypoints_detected;
+}
+
+void BlackboxProcessor::compute_keypoints(std::vector<PointCloud::Ptr> &sub_clouds, unsigned int method) {
+  // check the validness of the point cloud
+  if (sub_clouds.size() == 0) {
+    printf("[C++|compute_keypoints] Invalid input cloud.\n");
+    return;
+  }
+
+  for (std::vector<PointCloud::Ptr>::iterator it = sub_clouds.begin(); it != sub_clouds.end(); ++ it) {
+    this->potential_keypoints.push_back(this->keypoints(*it, method));
+  }
+  return;
+}
+
+BlackboxProcessor::PointCloud::Ptr BlackboxProcessor::pcl_transform(PointCloud::Ptr cloud) {
+  // pcl_transform doesn't care whether the size of the
+  // point cloud is valid or not, it just do the translation
+  // on all 3d points
+  PointCloud::Ptr transformed(new PointCloud);
+  pcl::transformPointCloud(*cloud, *transformed, this->transform2robot);
+  return transformed;
+}
+
+void *BlackboxProcessor::pcl_visualize(void) {
+  printf("\t[C++ Thread|pcl_visualize] Initializing point cloud viewer...\n");
+  pcl::visualization::PCLVisualizer viewer("PointCloudVisualizer");
+  int vp1 = 0, vp2 = 0, vp3 = 0;
+  // vp1 for general visualization
+  viewer.createViewPort(0.0, 0.0, 0.5, 1.0, vp1);
+  viewer.setBackgroundColor(0, 0, 0, vp1);
+
+  // vp2 for model visualization
+  viewer.createViewPort(0.5, 0.5, 1.0, 1.0, vp2);
+  viewer.setBackgroundColor(0.3, 0.3, 0.3, vp2);
+  viewer.addPointCloud<pcl::PointXYZ>(this->model_cloud, "model_cloud", vp2);
+  viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "model_cloud");
+
+  // vp3 for euclidean visualization
+  viewer.createViewPort(0.5, 0.0, 1.0, 0.5, vp3);
+  viewer.setBackgroundColor(0, 0, 0, vp3);
+
+  viewer.addCoordinateSystem(1.0, vp1);
+  viewer.addCoordinateSystem(1.0, vp2);
+  viewer.addCoordinateSystem(1.0, vp3);
+  viewer.initCameraParameters();
+
+  viewer.registerKeyboardCallback(&BlackboxProcessor::keyboard_event_occurred, *this, (void *)&viewer);
+  // start streaming
+  while (!viewer.wasStopped() && !this->visual_terminate) {
+    if (sem_trywait(&this->point_cloud_resources) == 0) {
+      // update the cloud
+      viewer.removeAllPointClouds(vp1);
+      for (std::vector<PointCloud::Ptr>::const_iterator it = this->pipeline.begin(); it != this->pipeline.end(); ++it) {
+        std::string cloud_name = "pipeline_" + boost::lexical_cast<std::string>(it - this->pipeline.begin());
+        pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> cluster_colors(*it);
+        viewer.addPointCloud<pcl::PointXYZ>(*it, cluster_colors, cloud_name, vp1);
+        viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloud_name);
+      }
+      // update the keypoints
+      viewer.removeAllPointClouds(vp3);
+      for (std::vector<PointCloud::Ptr>::const_iterator it = this->potential_keypoints.begin(); it != this->potential_keypoints.end(); ++it) {
+        std::string cloud_name = "keypoints_group_" + boost::lexical_cast<std::string>(it - this->potential_keypoints.begin());
+        pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> cluster_colors(*it);
+        viewer.addPointCloud<pcl::PointXYZ>(*it, cluster_colors, cloud_name, vp3);
+        viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, cloud_name);
+      }
+      // update euclidean clusters
+      for (std::vector<PointCloud::Ptr>::const_iterator it = this->potential_objects.begin(); it != this->potential_objects.end(); ++it) {
+        std::string cloud_name = "potential_obj_" + boost::lexical_cast<std::string>(it - this->potential_objects.begin());
+        pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> cluster_colors(*it);
+        viewer.addPointCloud<pcl::PointXYZ>(*it, cluster_colors, cloud_name, vp3);
+        viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloud_name);
+      }
+    }
+    viewer.spinOnce(100);
+    usleep(100000);
+  }
+  viewer.close();
+  printf("[C++|pcl_visualize] Exiting visualizer...\n");
+  return NULL;
+}
+
+void BlackboxProcessor::save_point_cloud(PointCloud::Ptr cloud) {
+  std::string save_name = "scene" + boost::lexical_cast<std::string>(this->seq) + ".pcd";
+  pcl::io::savePCDFileASCII(save_name, *cloud);
+  printf("[C++|save_point_cloud] Current frame saved.\n");
+  return;
+}
+
+void BlackboxProcessor::keyboard_event_occurred(const pcl::visualization::KeyboardEvent &event, void *viewerHd) {
+  // save the point cloud when press 'S'
+  if ((event.getKeySym() == "s" || event.getKeySym() == "S") && event.keyDown()) {
+    printf("[C++|keyboard_event_detected] Saving point cloud...\n");
+    this->save_point_cloud(this->pipeline.front());
+  }
+  return;
+}
+
+bool BlackboxProcessor::path_from_grid(PointCloud::Ptr cloud, std::vector<float> &trajectory, float resX, float resY) {
+  return true;
+}
+
+std::string BlackboxProcessor::Hello(void) {
+  return "[C++] Hello world!";
+}
+
+bool BlackboxProcessor::ImportMesh(std::string path) {
+  printf("[C++|ImportMesh] Importing mesh file from %s.\n", path.c_str());
+  pcl::PolygonMesh mesh;
+  if (pcl::io::loadPolygonFileSTL(path, mesh) == 0) {
+    printf("[C++|ImportMesh] Failed to import 3D model.\n");
+    return false;
+  }
+  // transfer from mesh to point cloud
+  pcl::fromPCLPointCloud2(mesh.cloud, *this->model_cloud);
+  printf("[C++|ImportMesh] Done. Point cloud size: %ld\n", this->model_cloud->size());
+  return true;
+}
+
+std::vector<float> BlackboxProcessor::Process(std::vector<float> points,
+                                            int dim,
+                                            int width, int height) {
+  std::vector<float> trajectory;
+  PointCloud::Ptr input_cloud(new PointCloud), processed;
+  // vector --> point cloud data structure
+  this->vec2pcl(points, dim, width, height, input_cloud);
+  printf("[C++|Process] Input Size: [%d x %d] %ld points.\n", input_cloud->width, input_cloud->height, input_cloud->size());
+  
+  // START of the pipeline ////////////////////
+  this->ClearPrevious();
+  // set the region of interest
+  input_cloud = this->pcl_passthrough(input_cloud);
+  printf("[C++|Process] Size Within ROI: (%d x %d).\n", input_cloud->width, input_cloud->height);
+  // transform the point cloud into robot/work frame
+  printf("[C++|Process] Camera Frame --> Robot/Work Frame...\n");
+  input_cloud = this->pcl_transform(input_cloud);
+  this->pipeline.push_back(input_cloud);
+  // plane segmentation
+  processed = this->pcl_plane_seg(input_cloud);
+  this->pipeline.push_back(processed);
+  // cloud clustering
+  this->pcl_euclidean_extraction(processed);
+  printf("[C++|Process] (%ld) potential objects extracted.\n", this->potential_objects.size());
+  // keypoints detection
+  this->compute_keypoints(this->potential_objects, HARRIS_3D);
+  printf("[C++|Process] Keypoints detected.\n");
+  // END of the pipeline //////////////////////
+
+  // DISPLAY
+  sem_post(&this->point_cloud_resources);
+  // point cloud data structure --> vector
+  trajectory.clear();
+  this->pcl2vec(processed, trajectory);
+  printf("[C++|Process] Done.\n");
+
+  this->seq ++;
+  return trajectory;
+}
+
+bool BlackboxProcessor::StartVisualization(void) {
+  printf("[C++|StartVisualization] Setting up visualization thread...\n");
+  bool mutex_success = sem_init(&this->point_cloud_resources, 0, 0);
+  bool thread_success = pthread_create(&this->visualization_thread, NULL, (THREADFUNCPTR)&BlackboxProcessor::pcl_visualize, this);
+  if (!(thread_success || mutex_success)) {
+    this->visual_start = true;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void BlackboxProcessor::SetResolution(float res_x, float res_y) {
+  this->resX = res_x;
+  this->resY = res_y;
+  return;
+}
+
+void BlackboxProcessor::SetROI(float lower_x, float upper_x,
+                                float lower_y, float upper_y,
+                                float lower_z, float upper_z) {
+  this->lowerX = lower_x;
+  this->upperX = upper_x;
+  this->lowerY = lower_y;
+  this->upperY = upper_y;
+  this->lowerZ = lower_z;
+  this->upperZ = upper_z;
+  return;
+}
+
+void BlackboxProcessor::SetTransformMatrix(float trans_x, float trans_y, float trans_z,
+                                            float linear_x, float linear_y, float linear_z) {
+  this->transX = trans_x;
+  this->transY = trans_y;
+  this->transZ = trans_z;
+  this->linearX = linear_x;
+  this->linearY = linear_y;
+  this->linearZ = linear_z;
+  // translation component
+  this->transform2robot.translation() = Eigen::Vector3f(this->transX, this->transY, this->transZ);
+  // linear component
+  this->transform2robot.prerotate(Eigen::AngleAxis<float>(this->linearX, Eigen::Vector3f::UnitX()));
+  this->transform2robot.prerotate(Eigen::AngleAxis<float>(this->linearY, Eigen::Vector3f::UnitY()));
+  this->transform2robot.prerotate(Eigen::AngleAxis<float>(this->linearZ, Eigen::Vector3f::UnitZ()));
+  // scale
+  this->transform2robot.scale(TF_SCALING);
+  return;
+}
+
+BOOST_PYTHON_MODULE(processor) {
+  class_<BlackboxProcessor>("BlackboxProcessor")
+    .def("Hello", &BlackboxProcessor::Hello)
+    .def("Process", &BlackboxProcessor::Process)
+    .def("StartVisualization", &BlackboxProcessor::StartVisualization)
+    .def("ImportMesh", &BlackboxProcessor::ImportMesh)
+    .def("SetResolution", &BlackboxProcessor::SetResolution)
+    .def("SetROI", &BlackboxProcessor::SetROI)
+    .def("SetTransformMatrix", &BlackboxProcessor::SetTransformMatrix)
+  ;
+
+  class_<std::vector<float> >("FloatVec")
+    .def(vector_indexing_suite<std::vector<float> >())
+  ;
+}

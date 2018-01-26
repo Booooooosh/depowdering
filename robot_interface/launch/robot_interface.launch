@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <!-- In real mode, we need to do the remapping for our interface -->
+  <arg name="sim" default="true" />
+
+  <!-- Launch blackbox node -->
+  <node pkg="robot_interface" type="robot_trajectory_interface" name="robot_interface" required="true" output="screen">
+    <remap from="joint_states" to="arm_controller/joint_states" unless="$(arg sim)"/>
+    <rosparam command="load" file="$(find robot_interface)/yaml/kinematics.yaml" />
+    <rosparam command="load" file="$(find robot_interface)/yaml/robot_trajectory_interface.yaml" />
+  </node>
+
+</launch>

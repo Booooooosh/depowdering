@@ -1,0 +1,12 @@
+general:
+  trajectory_topic_name: "/blackbox/robot_trajectory"
+  robot_frame_name: "world"
+
+approaching_points:
+  start: [1.725956, 0.201411, 1.93173, 0.0706858, 0.9936159, 1.345474]
+  end: [1.957212, -0.1488766, 2.290745, 0.065275, 0.971625, 1.578650]
+
+workspace:
+  ref_frame: "robot_work_frame"
+  meshes:
+    buildbox: "package://robot_interface/meshes/buildbox.STL"

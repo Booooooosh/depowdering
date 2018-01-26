@@ -1,0 +1,2 @@
+blackbox_output: '/blackbox/trajectory'
+cam_service: /kinect_feedback/next_frame'

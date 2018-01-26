@@ -1,0 +1,3 @@
+kinect_frame_topic: '/camera/depth/points'
+publish_frame_topic: 'point_cloud'
+ack_service_name: 'next_frame'

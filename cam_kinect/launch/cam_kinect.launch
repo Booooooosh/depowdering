@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="sim" default="false" />
+  <!-- Setup world frame -->
+  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.00645 0.65142 0.911 1.57079632679 1.57079632679 0 world camera_link 100" />
+ <!--  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.0157 0.65142 0.911 0 0 3.14159265359 world camera_depth_optical_frame 100" /> -->
+  <!-- Launch the kinect ROS driver -->
+  <include file="$(find freenect_launch)/launch/freenect.launch" unless="$(arg sim)" />
+
+  <!-- Launch kinect_cam node -->
+  <node name="kinect_grabber" pkg="cam_kinect" type="cam_kinect" required="true" output="screen" unless="$(arg sim)" >
+    <rosparam command="load" file="$(find cam_kinect)/yaml/cam_kinect.yaml" />
+  </node>
+
+  <!-- Point cloud simulation -->
+  <node name="kinect_grabber_sim" pkg="cam_kinect" type="pseudo_point_cloud_sender.py" respawn="true" output="screen" if="$(arg sim)" />
+
+</launch>

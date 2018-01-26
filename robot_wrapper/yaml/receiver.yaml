@@ -1,0 +1,6 @@
+rwr_interface: ['wlan0', 'eth0']
+rwr_port: 8080
+rwr_buffer_size: 1024
+rwr_thread_timeout: 60.0
+rwr_refreash_accept_list: 5.0
+rwr_recv_delay_tolerance: 3.0
