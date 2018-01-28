@@ -1,0 +1,4 @@
+[submodule "denso_robot_ros"]
+	path = denso_robot_ros
+	url = git@github.com:Booooooosh/denso_robot_ros.git
+	branch = indigo-devel
