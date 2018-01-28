@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package>
+  <name>depowdering_bringup</name>
+  <version>1.0.0</version>
+  <description>The depowdering bringup package launches the whole system.</description>
+  <maintainer email="booooooshat1994@gmail.com">Bosch Tang</maintainer>
+  <license>BSD</license>
+  <author email="booooooshat1994@gmail.com">Bosch Tang</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

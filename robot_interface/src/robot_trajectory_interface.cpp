@@ -53,7 +53,7 @@ class RobotTrajectoryInterface {
   moveit::planning_interface::PlanningSceneInterface planning_scene;
 
  public:
-  RobotTrajectoryInterface() : manipulator("manipulator"), nh("robot_interface"), pnh("~") {
+  RobotTrajectoryInterface() : manipulator("arm"), nh("robot_interface"), pnh("~") {
     ROS_INFO("[rbt_trj] Initializing robot_trajectory node...");
     // subscribe to trajectory topic
     std::string sub_topic_name = this->pnh.param<std::string>("general/trajectory_topic_name", "/blackbox/robot_trajectory");
@@ -141,7 +141,7 @@ class RobotTrajectoryInterface {
     // default planner id
     this->manipulator.setPlannerId("RRTConnectkConfigDefault");
     ROS_INFO("\t[Default PlannerID]:");
-    ROS_INFO("\t\t%s", this->manipulator.getDefaultPlannerId("manipulator").c_str());
+    ROS_INFO("\t\t%s", this->manipulator.getDefaultPlannerId("arm").c_str());
     // end effector name
     ROS_INFO("\t[End Effector]:");
     ROS_INFO("\t\t%s", this->manipulator.getEndEffector().c_str());

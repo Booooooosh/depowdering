@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <!-- By default, we are not in simulation mode -->
+  <arg name="robot_name" default="vs6577" />
+  <arg name="sim" default="false" />
+  <arg name="recv_format" default="292" />
+  <arg name="send_format" default="288" />
+
+  <!-- By default, we start the vision pipline -->
+  <arg name="use_kinect" default="true" />
+
+  <!-- By default, we start the vs6577 interface -->
+  <arg name="automata_interface" default="true" />
+
+  <!-- Startup the denso controller -->
+  <arg name="robot_ip" default="192.168.1.3" />
+
+  <!-- If needed, broadcast static tf for robot root -->
+  <!-- Launch the denso_robot_controller as well as MoveIt -->
+  <include file="$(find denso_robot_bringup)/launch/$(arg robot_name)_bringup.launch" >
+    <arg name="sim" value="$(arg sim)" />
+    <arg name="ip_address" value="$(arg robot_ip)" />
+    <arg name="send_format" value="$(arg send_format)" />
+    <arg name="recv_format" value="$(arg recv_format)" />
+  </include>
+
+  <!-- Run the kinect sensor -->
+  <group if="$(arg use_kinect)">
+    <include file="$(find cam_kinect)/launch/cam_kinect.launch" />
+    <include file="$(find blackbox)/launch/blackbox.launch" />
+  </group>
+
+  <!-- Run the vs6577 interface, for trajectory execution -->
+  <group if="$(arg automata_interface)">
+    <include file="$(find robot_interface)/launch/robot_interface.launch" >
+      <arg name="robot_name" value="$(arg robot_name)" />
+    </include>
+  </group>
+
+</launch>
