@@ -19,6 +19,15 @@ find_package(catkin REQUIRED COMPONENTS
 )
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
 
+add_service_files(
+  FILES
+  IO_Control.srv
+)
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
 catkin_package(
   CATKIN_DEPENDS 
   roscpp

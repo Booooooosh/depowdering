@@ -8,6 +8,7 @@
   <!-- Launch blackbox node -->
   <node pkg="robot_interface" type="robot_trajectory_interface" name="robot_interface" required="true" output="screen">
     <remap from="joint_states" to="$(arg robot_name)/joint_states" />
+    <param name="general/robot_name" type="string" value="$(arg robot_name)" />
     <rosparam command="load" file="$(find robot_interface)/yaml/kinematics.yaml" />
     <rosparam command="load" file="$(find robot_interface)/yaml/robot_trajectory_interface.yaml" />
   </node>

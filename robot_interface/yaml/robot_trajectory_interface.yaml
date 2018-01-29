@@ -1,6 +1,7 @@
 general:
   trajectory_topic_name: "/blackbox/robot_trajectory"
   robot_frame_name: "world"
+  io_port: 30
 
 approaching_points:
   start: [1.725956, 0.201411, 1.93173, 0.0706858, 0.9936159, 1.345474]

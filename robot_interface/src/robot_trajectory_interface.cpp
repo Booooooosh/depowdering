@@ -24,12 +24,14 @@
 
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/Int32.h>
 
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/shape_operations.h>
 
 #include <cam_kinect/FetchOneFrame.h>
 #include <blackbox/Trajectory.h>
+#include <robot_interface/IO_Control.h>
 
 class RobotTrajectoryInterface {
  private:
@@ -46,11 +48,18 @@ class RobotTrajectoryInterface {
   // ros publisher and subscriber
   ros::NodeHandle nh, pnh;
   ros::Subscriber robot_trajectory;
+  ros::ServiceServer io_controller;
   ros::Publisher  eef_pose;
+  ros::Publisher  io_writter;
+  ros::Subscriber io_reader;
 
   // moveit interface
   moveit::planning_interface::MoveGroup manipulator;
   moveit::planning_interface::PlanningSceneInterface planning_scene;
+
+  // IO port and EEF
+  std::string robot_name;
+  int io_port;
 
  public:
   RobotTrajectoryInterface() : manipulator("arm"), nh("robot_interface"), pnh("~") {
@@ -60,6 +69,11 @@ class RobotTrajectoryInterface {
     this->robot_trajectory = this->nh.subscribe(sub_topic_name, 1, &RobotTrajectoryInterface::trajectoryCb, this);
     // publish end effector pose
     this->eef_pose = this->nh.advertise<geometry_msgs::PoseStamped>("eef_pose", 10);
+    // publish io relative services
+    this->robot_name = this->pnh.param<std::string>("general/robot_name", "vs6577");
+    this->io_port = this->pnh.param<int>("general/io_port", 30);
+    this->io_writter = this->nh.advertise<std_msgs::Int32>(this->robot_name + "/Write_MiniIO", 5);
+    this->io_controller = this->nh.advertiseService("io_controller", &RobotTrajectoryInterface::io_controllerCb, this);
 
     // load start/end pose
     this->target_frame = this->pnh.param<std::string>("general/robot_frame_name", "world");
@@ -148,6 +162,27 @@ class RobotTrajectoryInterface {
 
     // finished
     ROS_INFO("[rbt_trj] Done.");
+  }
+
+  bool io_controllerCb(robot_interface::IO_Control::Request &req, 
+                        robot_interface::IO_Control::Response &res) {
+    std_msgs::Int32 cmd;
+    if (req.request == "on") {
+      // turn ON the IO${this->io_port}
+      cmd.data = (0x1 << this->io_port);
+    } else if (req.request == "off") {
+      // turn OFF
+      cmd.data = 0x0;
+    }
+
+    // send the command
+    ROS_INFO("[rbt_trj] Command to be sent to IO port is [%x].", cmd.data);
+    this->io_writter.publish(cmd);
+    ROS_INFO("[rbt_trj] Sent.");
+
+    res.success = true;
+    res.reason = "Done.";
+    return true;
   }
 
   void trajectoryCb(const blackbox::TrajectoryConstPtr &trajectory) {

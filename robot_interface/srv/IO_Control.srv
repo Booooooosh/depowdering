@@ -1,0 +1,5 @@
+# request: "on" for turn on, "off" for turn off
+string request
+---
+bool success
+string reason
