@@ -134,6 +134,9 @@ class CentralProcessor {
     this->lowerX = (float)config.roi_lower_x; this->upperX = (float)config.roi_upper_x;
     this->lowerY = (float)config.roi_lower_y; this->upperY = (float)config.roi_upper_y;
     this->lowerZ = (float)config.roi_lower_z; this->upperZ = (float)config.roi_upper_z;
+
+    ROS_INFO("Reconfigure request: EEFOffset: %f.", config.EEFOffset);
+    this->EEFOffset = (float)config.EEFOffset;
   }
 };
 
