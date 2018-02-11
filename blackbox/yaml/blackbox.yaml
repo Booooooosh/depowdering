@@ -7,6 +7,8 @@ resolution:
   y: 15.0
 end_effector:
   offset: 40.0
+kinect:
+  offsetZ: -3.0
 
 ros_node:
   sub_topic_name: '/kinect_feedback/point_cloud'

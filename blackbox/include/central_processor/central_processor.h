@@ -45,6 +45,8 @@ class CentralProcessor {
   float lowerX, upperX, lowerY, upperY, lowerZ, upperZ;
   // grid ALG resolution
   float resX, resY, EEFOffset;
+  // kinect offset in Z direction
+  float kinectOffsetZ;
 
   PointCloudPtr last_frame;
   unsigned int seq;
@@ -84,6 +86,7 @@ class CentralProcessor {
     this->resX = this->pnh.param<double>("resolution/x", 15.0);
     this->resY = this->pnh.param<double>("resolution/y", 15.0);
     this->EEFOffset = this->pnh.param<double>("end_effector/offset", 5.0);
+    this->kinectOffsetZ = this->pnh.param<double>("kinect/offsetZ", -3.0);
 
     // topics //
     std::string sub_topic_name = this->pnh.param<std::string>("ros_node/sub_topic_name", "/kinect_feedback/point_cloud");
@@ -137,6 +140,9 @@ class CentralProcessor {
 
     ROS_INFO("Reconfigure request: EEFOffset: %f.", config.EEFOffset);
     this->EEFOffset = (float)config.EEFOffset;
+
+    ROS_INFO("Reconfigure request: KinectOffsetZ: %lf.", config.KinectOffsetZ);
+    this->kinectOffsetZ = (float)config.KinectOffsetZ;
   }
 };
 

@@ -153,7 +153,7 @@ bool CentralProcessor::path_from_grid(const PointCloudPtr &cloud, std::vector<fl
 
     // update the grid
     if (it->z >= grid[index_x][6 * index_y + 2]) {
-      grid[index_x][6 * index_y + 2] = (it->z + this->EEFOffset);
+      grid[index_x][6 * index_y + 2] = (it->z + this->EEFOffset + this->kinectOffsetZ);
     }
   }
 
