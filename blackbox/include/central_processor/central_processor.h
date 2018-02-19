@@ -24,6 +24,8 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <blackbox/Trajectory.h>
 
+#include <blackbox/BayesFilter.h>
+
 #include <blackbox/BlackboxConfig.h>
 
 class CentralProcessor {
@@ -45,6 +47,8 @@ class CentralProcessor {
   float lowerX, upperX, lowerY, upperY, lowerZ, upperZ;
   // grid ALG resolution
   float resX, resY, EEFOffset;
+  // service client to bayes_filter
+  ros::ServiceClient bayes_filter;
   // kinect offset in Z direction
   float kinectOffsetZ;
 
@@ -87,6 +91,10 @@ class CentralProcessor {
     this->resY = this->pnh.param<double>("resolution/y", 15.0);
     this->EEFOffset = this->pnh.param<double>("end_effector/offset", 5.0);
     this->kinectOffsetZ = this->pnh.param<double>("kinect/offsetZ", -3.0);
+
+    // bayes filter //
+    std::string bf_service_name = this->pnh.param<std::string>("ros_service/bayes_filter", "/blackbox_auxillary/bayes_filter");
+    this->bayes_filter = this->nh.serviceClient<blackbox::BayesFilter>(bf_service_name);
 
     // topics //
     std::string sub_topic_name = this->pnh.param<std::string>("ros_node/sub_topic_name", "/kinect_feedback/point_cloud");

@@ -45,6 +45,26 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   debug_cloud.header.frame_id = this->target_frame;
   this->_debug_window.publish(debug_cloud);
 
+  // pass through bayes_filter
+  if (!this->bayes_filter.exists()) {
+    ROS_WARN("[processing] Bayes filter is offline. Skip bayes update.");
+  } else {
+    blackbox::BayesFilter filter;
+    filter.request.header.stamp = ros::Time::now();
+    filter.request.header.frame_id = this->target_frame;
+    filter.request.header.seq = this->seq;
+    filter.request.width = processed->width;
+    filter.request.height = processed->height;
+    filter.request.measurement = debug_cloud;
+
+    if (!this->bayes_filter.call(filter)) {
+      ROS_ERROR("[processing] Failed to call BayesFilter. :(");
+    } else {
+      ROS_INFO("[processing] Current frame passed to BayesFilter.");
+      // TODO (Bosch): fetch the result from bayes filter
+    }
+  }
+
   // generating trajectory
   std::vector<float> trajectory;
   // transfer the cloud from (m) to (mm)
@@ -65,6 +85,9 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   trj_to_robot.trajectory = trajectory;
   this->to_robot.publish(trj_to_robot);
   ROS_INFO("[processing] Trajectory sent.");
+
+  // update sequence counter
+  seq += 1;
 
   return;
 }
