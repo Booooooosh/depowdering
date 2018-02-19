@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <!-- bringup the auxillary node -->
+  <node name="blackbox_auxillary" pkg="blackbox" type="blackbox_auxillary.py" required="false" respawn="false" output="screen" >
+    <rosparam command="load" file="$(find blackbox)/yaml/bayes_filter.yaml" />
+  </node>
+
+</launch>

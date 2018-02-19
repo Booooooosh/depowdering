@@ -14,3 +14,6 @@ ros_node:
   sub_topic_name: '/kinect_feedback/point_cloud'
   pub_topic_name: 'robot_trajectory'
   target_frame: 'robot_work_frame'
+
+ros_service:
+  bayes_filter: '/blackbox_auxillary/bayes_filter'

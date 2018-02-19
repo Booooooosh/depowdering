@@ -1,0 +1,10 @@
+# sensor reading for Bayes Update
+Header header
+int32 width
+int32 height
+sensor_msgs/PointCloud2 measurement
+---
+# return a list of points representing the posterior of the location of the part
+bool success
+float64[] occupied
+string reason
