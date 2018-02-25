@@ -163,7 +163,7 @@ class DepowderingSimulator():
       return False
     else:
       if (self.seq % freq) == 0:
-        disturbance = (np.random.randint(-4, 4), np.random.randint(-4, 4))
+        disturbance = (np.random.randint(-10, 10), np.random.randint(-4, 4))
         rospy.logwarn("[DP_SIM] Disturb the part by [{0}, {1}] grids".format(disturbance[0], disturbance[1]))
         self._disturb_the_part(disturbance)
 

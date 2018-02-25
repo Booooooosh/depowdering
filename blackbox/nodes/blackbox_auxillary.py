@@ -41,7 +41,7 @@ class Auxillary():
     self.cur_frame = None
     self.cur_attr = None
     ## Decision Parameters ##
-    self.bf_threshold = rospy.get_param("~decision/threshold", 0.7)
+    self.bf_threshold = rospy.get_param("~decision/threshold", 0.1)
     self.bf_resolution = rospy.get_param("~discretization/resolution", 15.0)
     self.bf_parameters = dict()
     self.bf_parameters['free2free'] = rospy.get_param("~decision/free2free", 0.6)
@@ -257,8 +257,19 @@ class Auxillary():
     return
 
   def _bf_belif_scrutinizer(self):
+    """
+    the scrutinizer will check the validness of the belif(zero probability should not happen...)
+    and analyze where our part is according to the belif
+    """
+    # check validness
     if np.count_nonzero(self.belif) != self.belif.shape[0] * self.belif.shape[1]:
       rospy.logwarn("[BF_SCRUT] Bins with zero-belif detected!")
+
+    # analyze this frame of belif
+    rospy.loginfo("[BF_SCRUT] Analyze the belif map with threshold: {0}...".format(self.bf_threshold))
+    result = np.nonzero(self.belif < self.bf_threshold)
+    num_of_bins_as_parts = result[0].shape[0]
+    rospy.logwarn("[BF_SCRUT] {0} bins detected as part.".format(num_of_bins_as_parts))
 
     return
 
