@@ -32,6 +32,7 @@
 #include <cam_kinect/FetchOneFrame.h>
 #include <blackbox/Trajectory.h>
 #include <robot_interface/IO_Control.h>
+#include <robot_interface/FollowEdge.h>
 
 class RobotTrajectoryInterface {
  private:
@@ -44,11 +45,16 @@ class RobotTrajectoryInterface {
   // current pose for the end effector
   geometry_msgs::Pose current_pose;
   boost::shared_mutex pose_update_lock;
+  // waypoints interval
+  double cartesian_interval;
+  // cartesian path computation threading
+  int numof_threads;
 
   // ros publisher and subscriber
   ros::NodeHandle nh, pnh;
   ros::Subscriber robot_trajectory;
   ros::ServiceServer io_controller;
+  ros::ServiceServer edge_follower;
   ros::Publisher  eef_pose;
   ros::Publisher  io_writter;
   ros::Subscriber io_reader;
@@ -60,6 +66,9 @@ class RobotTrajectoryInterface {
   // IO port and EEF
   std::string robot_name;
   int io_port;
+
+  // edge follower
+  double bb_edge_len;
 
  public:
   RobotTrajectoryInterface() : manipulator("arm"), nh("robot_interface"), pnh("~") {
@@ -74,6 +83,11 @@ class RobotTrajectoryInterface {
     this->io_port = this->pnh.param<int>("general/io_port", 30);
     this->io_writter = this->nh.advertise<std_msgs::Int32>(this->robot_name + "/Write_MiniIO", 5);
     this->io_controller = this->nh.advertiseService("io_controller", &RobotTrajectoryInterface::io_controllerCb, this);
+    this->bb_edge_len = this->pnh.param<double>("general/buildbox_edge_len", 0.3);
+    this->edge_follower = this->nh.advertiseService("edge_follower", &RobotTrajectoryInterface::edge_followerCb, this);
+    // cartesian path relative
+    this->cartesian_interval = this->pnh.param<double>("motion_planning/distance_bw_cartesian_points", 0.001);
+    this->numof_threads = this->pnh.param<int>("motion_planning/numof_threads", 2);
 
     // load start/end pose
     this->target_frame = this->pnh.param<std::string>("general/robot_frame_name", "world");
@@ -142,6 +156,7 @@ class RobotTrajectoryInterface {
     this->manipulator.startStateMonitor();
     ROS_INFO("[rbt_trj] Done.");
 
+    ROS_INFO("[rbt_trj] ===================================");
     ROS_INFO("[rbt_trj] Here is some info w.r.t move_group:");
     // joint names
     ROS_INFO("\t[Joint Names]:");
@@ -159,6 +174,13 @@ class RobotTrajectoryInterface {
     // end effector name
     ROS_INFO("\t[End Effector]:");
     ROS_INFO("\t\t%s", this->manipulator.getEndEffector().c_str());
+    // cartesian path computation
+    ROS_INFO("[rbt_trj] Here is some info w.r.t motion planner:");
+    ROS_INFO("\t[# of computation therads]:");
+    ROS_INFO("\t\t%d", this->numof_threads);
+    ROS_INFO("\t[Distance b/w two cartesian waypoints]");
+    ROS_INFO("\t\t%lfm", this->cartesian_interval);
+    ROS_INFO("[rbt_trj] ===================================");
 
     // finished
     ROS_INFO("[rbt_trj] Done.");
@@ -183,6 +205,119 @@ class RobotTrajectoryInterface {
     res.success = true;
     res.reason = "Done.";
     return true;
+  }
+
+  bool edge_followerCb(robot_interface::FollowEdge::Request &req, 
+                      robot_interface::FollowEdge::Response &res) {
+    // check request validness
+    // offset (we impose a minimum 10mm offset) //
+    double offset = 0.01;
+    if (req.offset < 0.5 && req.offset > offset) {
+      offset = req.offset;
+    } else if (req.offset >= 0.5) {
+      ROS_WARN("[bb_frame_test] Offsets should be in specified meters.");
+      res.success = false;
+      res.reason = "Check the offet metric.";
+      return true;
+    }
+    // delay (2 seconds by default) //
+    int delay = 2;
+    if (req.delay > 0) {
+      delay = req.delay;
+    }
+
+    // lookup transformation b/w work frame and robot frame
+    // by default, the frame will be "robot_work_frame"
+    std::string ref_frame = "robot_work_frame";
+    if (req.ref_frame.length() > 0) {
+      ROS_WARN("[bb_frame_test] Changing reference frame to %s.", req.ref_frame.c_str());
+    } else {
+      ROS_INFO("[bb_frame_test] Using default reference frame: %s.", req.ref_frame.c_str());
+    }
+
+    ROS_INFO("[bb_frame_test] Looking for transformation matrix from %s to %s.", ref_frame.c_str(), this->target_frame.c_str());
+    tf::StampedTransform work2rob;
+    Eigen::Affine3d transformer;
+    try {
+      this->tf_listener.waitForTransform(this->target_frame, ref_frame, ros::Time::now(), ros::Duration(4.f));
+      this->tf_listener.lookupTransform(this->target_frame, ref_frame, ros::Time::now(), work2rob);
+    } catch (tf::LookupException &err) {
+      ROS_ERROR("[bb_frame_test] Lookup [Work Frame --> Robot Frame] falied.");
+      res.success = false;
+      res.reason = "Frame transformation not found.";
+      return true;
+    } catch (tf::ExtrapolationException &err) {
+      ROS_ERROR("[bb_frame_test] Lookup [Work Frame --> Robot Frame] falied.");
+      res.success = false;
+      res.reason = "Frame transformation not found.";
+      return true;
+    } catch (tf::TransformException &err) {
+      ROS_ERROR("[bb_frame_test] Lookup [Work Frame --> Robot Frame] falied.");
+      res.success = false;
+      res.reason = "Frame transformation not found.";
+      return true;
+    }
+    tf::transformTFToEigen(work2rob, transformer);
+    ROS_INFO("[bb_frame_test] Done.");
+
+    // set test trajectory
+    std::vector<geometry_msgs::Pose> waypoints;
+    geometry_msgs::Pose waypoint;
+    {
+      boost::shared_lock<boost::shared_mutex> read_lock(this->pose_update_lock);
+      waypoint = this->current_pose;
+    }
+    // waypoint 1 (0.0, 0.0, offset) //
+    waypoint.position.x = 0.0; waypoint.position.y = 0.0; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+    // waypoint 2 (300.0, 0.0, offset) //
+    waypoint.position.x = 0.0; waypoint.position.y = this->bb_edge_len; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+    // waypoint 3 (300.0, 300.0, offset) //
+    waypoint.position.x = this->bb_edge_len; waypoint.position.y = this->bb_edge_len; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+    // waypoint 4 (0.0, 300.0, offset) //
+    waypoint.position.x = this->bb_edge_len; waypoint.position.y = 0.0; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+    // waypoint 5 (0.0, 0.0, offset) //
+    waypoint.position.x = 0.0; waypoint.position.y = 0.0; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+    // waypoint 6 (0.0, -100.0, offset) //
+    waypoint.position.x = 0.0; waypoint.position.y = -0.1; waypoint.position.z = offset;
+    waypoints.push_back(waypoint);
+
+    // transfer to robot frame and execute
+    for (std::vector<geometry_msgs::Pose>::iterator it = waypoints.begin(); it != waypoints.end(); ++ it) {
+      Eigen::Vector3d point(it->position.x, it->position.y, it->position.z);
+      point = transformer * point;
+      it->position.x = point(0);
+      it->position.y = point(1);
+      it->position.z = point(2);
+
+      ROS_INFO("[bb_frame_test] Tracing edge to next point (%lf, %lf, %lf)...", it->position.x, it->position.y, it->position.z);
+
+      // try execution
+      this->manipulator.setPoseTarget(*it);
+
+      moveit::planning_interface::MoveGroup::Plan exe_plan;
+      if (this->manipulator.plan(exe_plan)) {
+        // got a plan, now execute
+        bool success = this->manipulator.execute(exe_plan);
+        if (success)  {ROS_INFO("[bb_frame_test] Done.");}
+        else          {ROS_ERROR("[bb_frame_test] Failed to approach start point!"); res.success = false; res.reason = "Execution failed :("; return true;}
+      } else {
+        ROS_ERROR("[bb_frame_test] No plan generated for approaching start point!");
+        res.success = false;
+        res.reason = "No plan found by MoveIt :(";
+        return true;
+      }
+
+      // wait for a while...
+      ros::Duration(delay).sleep();
+    }
+
+    // done
+    ROS_INFO("[bb_frame_test] Done.");
   }
 
   void trajectoryCb(const blackbox::TrajectoryConstPtr &trajectory) {
@@ -261,7 +396,7 @@ class RobotTrajectoryInterface {
 
     ROS_INFO("[rbt_trj] Computing waypoints for the rest of the trajectory...");
     moveit_msgs::RobotTrajectory actions;
-    double fraction = this->manipulator.computeCartesianPath(waypoints, 0.015, 0.0, actions);
+    double fraction = this->manipulator.computeCartesianPath(waypoints, this->cartesian_interval, 0.0, actions);
     ROS_INFO("[rbt_trj] Done. (%.2f%% acheived)", fraction * 100.0);
 
     ROS_INFO("[rbt_trj] Executing the trajectory...");

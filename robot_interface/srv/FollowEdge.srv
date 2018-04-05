@@ -1,0 +1,15 @@
+# worksapce frame test service messsage
+# this test will try to move the EEF along
+# the edge of the buildbox (30cm x 30cm)
+
+# @param offset: offset b/w tip of EEF and the top of the buildbox
+float32 offset
+# @param delay: the delay imposed when each corner is reached (in sec)
+int32 delay
+# @param frame(optional): indicate the name of the test trajectory reference frame
+string ref_frame
+---
+# @response success: boolean indicating success or not
+bool success
+# @response reason: if not successful, why
+string reason
