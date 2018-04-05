@@ -22,6 +22,7 @@ find_package(Boost REQUIRED COMPONENTS system filesystem thread)
 add_service_files(
   FILES
   IO_Control.srv
+  FollowEdge.srv
 )
 generate_messages(
   DEPENDENCIES

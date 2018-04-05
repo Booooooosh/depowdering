@@ -14,6 +14,7 @@
 #include <pcl/point_types.h>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/features/normal_3d.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
 #include <boost/thread/mutex.hpp>
@@ -51,6 +52,9 @@ class CentralProcessor {
   ros::ServiceClient bayes_filter;
   // kinect offset in Z direction
   float kinectOffsetZ;
+
+  // camera position and orientation calibration
+  bool normal_estimator;
 
   PointCloudPtr last_frame;
   unsigned int seq;
@@ -127,6 +131,11 @@ class CentralProcessor {
    */
   PointCloudPtr pcl_passthrough(PointCloudPtr cloud);
   /*
+   * Function @ normal_estimation
+   * estimate the normal of the input point cloud
+   */
+  bool pcl_normal_estimation(PointCloudPtr cloud);
+  /*
    * Function @ path_from_grid
    * generate path using simple grid method
    * Assumpotion: Units are in(mm)
@@ -151,6 +160,14 @@ class CentralProcessor {
 
     ROS_INFO("Reconfigure request: KinectOffsetZ: %lf.", config.KinectOffsetZ);
     this->kinectOffsetZ = (float)config.KinectOffsetZ;
+
+    if ((bool)config.enable_normal_estimator) {
+      ROS_INFO("Reconfigure request: normal_estimator enabled.");
+      this->normal_estimator = config.enable_normal_estimator;
+    } else {
+      ROS_INFO("Reconfigure request: normal_estimator disabled.");
+      this->normal_estimator = config.enable_normal_estimator;
+    }
   }
 };
 

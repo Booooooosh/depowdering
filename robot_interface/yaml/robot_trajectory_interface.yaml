@@ -1,4 +1,5 @@
 general:
+  buildbox_edge_len: 0.3
   trajectory_topic_name: "/blackbox/robot_trajectory"
   robot_frame_name: "world"
   io_port: 30

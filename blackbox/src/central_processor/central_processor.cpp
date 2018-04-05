@@ -45,6 +45,17 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   debug_cloud.header.frame_id = this->target_frame;
   this->_debug_window.publish(debug_cloud);
 
+  // normal estimator (if enabled)
+  // normal estimator should ONLY be enabled when calibrating the camera pose
+  if (this->normal_estimator) {
+    ROS_INFO("[normal_estimator] Estimating surface normal...");
+    this->pcl_normal_estimation(processed);
+
+    // since we are in calibration mode, no following processing is needed
+    ROS_WARN("[normal_estimator] In normal estimation mode, processing ABORTED.");
+    return;
+  }
+
   // pass through bayes_filter
   if (!this->bayes_filter.exists()) {
     ROS_WARN("[processing] Bayes filter is offline. Skip bayes update.");
@@ -101,13 +112,21 @@ CentralProcessor::PointCloudPtr CentralProcessor::pcl_passthrough(PointCloudPtr 
   PointCloudPtr filteredZ(new PointCloud), filteredZY(new PointCloud);
   PointCloudPtr processed(new PointCloud);
   pcl::PassThrough<pcl::PointXYZ> passthrough;
-  // filter Z-axis
-  passthrough.setInputCloud(cloud);
-  passthrough.setFilterFieldName("z");
-  passthrough.setFilterLimits(this->lowerZ, this->upperZ);
-  passthrough.filter(*filteredZ);
+  // filter Z-axis (only if we are NOT in calibration mode)
+  if (!this->normal_estimator) {
+    passthrough.setInputCloud(cloud);
+    passthrough.setFilterFieldName("z");
+    passthrough.setFilterLimits(this->lowerZ, this->upperZ);
+    passthrough.filter(*filteredZ);
+  } else {
+    ROS_WARN("[pcl_passthrough] In calibration mode, skip filtering Z value.");
+  }
   // filter Y-axis
-  passthrough.setInputCloud(filteredZ);
+  if (!this->normal_estimator) {
+    passthrough.setInputCloud(filteredZ);
+  } else {
+    passthrough.setInputCloud(cloud);
+  }
   passthrough.setFilterFieldName("y");
   passthrough.setFilterLimits(this->lowerY, this->upperY);
   passthrough.filter(*filteredZY);
@@ -118,6 +137,32 @@ CentralProcessor::PointCloudPtr CentralProcessor::pcl_passthrough(PointCloudPtr 
   passthrough.filter(*processed);
 
   return processed;
+}
+
+bool CentralProcessor::pcl_normal_estimation(PointCloudPtr cloud) {
+  if (cloud->size() <= 0) {
+    ROS_ERROR("[pcl_normal_estimation] Empty point cloud received.");
+    return false;
+  }
+
+  // normal estimation here
+  pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> estimator;
+  estimator.setInputCloud(cloud);
+
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ> ());
+  estimator.setSearchMethod(tree);
+
+  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+
+  estimator.setRadiusSearch(0.03);
+  estimator.compute(*cloud_normals);
+
+  ROS_INFO("[pcl_normal_estimation] Retrived %ld normals from the point cloud.", cloud_normals->points.size());
+  for (pcl::PointCloud<pcl::Normal>::const_iterator it = cloud_normals->begin(); it != cloud_normals->end(); ++ it) {
+    printf("[%lf, %lf, %lf]\n", it->normal_x, it->normal_y, it->normal_z);
+  }
+
+  return true;
 }
 
 bool CentralProcessor::path_from_grid(const PointCloudPtr &cloud, std::vector<float> &trajectory) {
