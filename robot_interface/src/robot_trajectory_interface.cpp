@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 
 #include <ros/ros.h>
 #include <ros/console.h>
@@ -33,6 +34,9 @@
 #include <blackbox/Trajectory.h>
 #include <robot_interface/IO_Control.h>
 #include <robot_interface/FollowEdge.h>
+
+#include <dynamic_reconfigure/server.h>
+#include <robot_interface/RobotInterfaceConfig.h>
 
 class RobotTrajectoryInterface {
  private:
@@ -70,6 +74,9 @@ class RobotTrajectoryInterface {
   // edge follower
   double bb_edge_len;
 
+  // dynamic reconfiguration
+  dynamic_reconfigure::Server<robot_interface::RobotInterfaceConfig> reconfig_server;
+
  public:
   RobotTrajectoryInterface() : manipulator("arm"), nh("robot_interface"), pnh("~") {
     ROS_INFO("[rbt_trj] Initializing robot_trajectory node...");
@@ -86,8 +93,13 @@ class RobotTrajectoryInterface {
     this->bb_edge_len = this->pnh.param<double>("general/buildbox_edge_len", 0.3);
     this->edge_follower = this->nh.advertiseService("edge_follower", &RobotTrajectoryInterface::edge_followerCb, this);
     // cartesian path relative
-    this->cartesian_interval = this->pnh.param<double>("motion_planning/distance_bw_cartesian_points", 0.001);
+    this->cartesian_interval = 0.001; // set from dynamic reconfiguration
     this->numof_threads = this->pnh.param<int>("motion_planning/numof_threads", 2);
+
+    // dynamic reconfiguration server setup
+    dynamic_reconfigure::Server<robot_interface::RobotInterfaceConfig>::CallbackType funcHd;
+    funcHd = boost::bind(&RobotTrajectoryInterface::dynamic_reconfigurationCb, this, _1, _2);
+    this->reconfig_server.setCallback(funcHd);
 
     // load start/end pose
     this->target_frame = this->pnh.param<std::string>("general/robot_frame_name", "world");
@@ -184,6 +196,11 @@ class RobotTrajectoryInterface {
 
     // finished
     ROS_INFO("[rbt_trj] Done.");
+  }
+
+  void dynamic_reconfigurationCb(robot_interface::RobotInterfaceConfig &config, uint32_t level) {
+    ROS_INFO("Reconfigure request: Waypoint interval: [%lf]", config.WaypointInterval);
+    this->cartesian_interval = config.WaypointInterval;
   }
 
   bool io_controllerCb(robot_interface::IO_Control::Request &req, 
@@ -395,9 +412,11 @@ class RobotTrajectoryInterface {
     }
 
     ROS_INFO("[rbt_trj] Computing waypoints for the rest of the trajectory...");
+    ros::Time computation_begin = ros::Time::now();
     moveit_msgs::RobotTrajectory actions;
     double fraction = this->manipulator.computeCartesianPath(waypoints, this->cartesian_interval, 0.0, actions);
-    ROS_INFO("[rbt_trj] Done. (%.2f%% acheived)", fraction * 100.0);
+    ros::Duration time_elapsed = ros::Time::now() - computation_begin;
+    ROS_INFO("[rbt_trj] Done. (%.2f%% acheived) [time elapsed: %lf secs]", fraction * 100.0, time_elapsed.toSec());
 
     ROS_INFO("[rbt_trj] Executing the trajectory...");
     moveit::planning_interface::MoveGroup::Plan exe_plan_2;
@@ -413,7 +432,7 @@ class RobotTrajectoryInterface {
     }
     ROS_INFO("[rbt_trj] Currently @ P(%lf, %lf, %lf).", waypoint.position.x, waypoint.position.y, waypoint.position.z);
     ROS_INFO("[rbt_trj] Returning to initial position...");
-    waypoint.position.z = 0.20740845427;
+    waypoint.position.z = 0.20740845427;  // TODO (get rid of this megic number)
     this->manipulator.setPoseTarget(waypoint);
     if (this->manipulator.plan(exe_plan)) {
       // got a plan, now execute

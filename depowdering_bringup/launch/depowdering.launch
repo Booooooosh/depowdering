@@ -14,6 +14,10 @@
   <!-- By default, we start the vs6577 interface -->
   <arg name="automata_interface" default="true" />
 
+  <!-- By default, we are not using bayes filter during processing -->
+  <!-- the bayes filter is used for localization -->
+  <arg name="use_bayes_filter" default="false" />
+
   <!-- Startup the denso controller -->
   <arg name="robot_ip" default="192.168.1.2" />
 
@@ -29,7 +33,9 @@
   <!-- Run the kinect sensor -->
   <group if="$(arg use_kinect)">
     <include file="$(find cam_kinect)/launch/cam_kinect.launch" />
-    <include file="$(find blackbox)/launch/blackbox.launch" />
+    <include file="$(find blackbox)/launch/blackbox.launch" >
+      <arg name="use_bayes_filter" value="$(arg use_bayes_filter)" />
+    </include>
   </group>
 
   <!-- Run the vs6577 interface, for trajectory execution -->

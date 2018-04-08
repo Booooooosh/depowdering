@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf_conversions
   std_msgs
   message_generation
+  dynamic_reconfigure
 )
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
 
@@ -29,7 +30,13 @@ generate_messages(
   std_msgs
 )
 
+## Generate dynamic reconfigure parameters in the 'cfg' folder
+generate_dynamic_reconfigure_options(
+  cfg/RobotInterface.cfg
+)
+
 catkin_package(
+  INCLUDE_DIRS include
   CATKIN_DEPENDS 
   roscpp
   moveit_core
@@ -47,5 +54,5 @@ include_directories(
 )
 
 add_executable(robot_trajectory_interface src/robot_trajectory_interface.cpp)
-add_dependencies(robot_trajectory_interface ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(robot_trajectory_interface ${PROJECT_NAME}_gencfg ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(robot_trajectory_interface ${catkin_LIBRARIES} ${Boost_LIBRARIES})

@@ -1,5 +1,2 @@
 blackbox_output: '/blackbox/trajectory'
 cam_service: /kinect_feedback/next_frame'
-motion_planning:
-  numof_threads: 2
-  distance_bw_cartesian_points: 0.001   # 0.001 is a pretty good depowdering speed (better if even slower)
