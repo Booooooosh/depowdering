@@ -51,6 +51,10 @@ class RobotTrajectoryInterface {
   boost::shared_mutex pose_update_lock;
   // waypoints interval
   double cartesian_interval;
+  // cartesian path velocity factor
+  double cartesian_VFactor;
+  // cartesian path acceleration factor
+  double cartesian_AccFactor;
   // cartesian path computation threading
   int numof_threads;
 
@@ -93,7 +97,9 @@ class RobotTrajectoryInterface {
     this->bb_edge_len = this->pnh.param<double>("general/buildbox_edge_len", 0.3);
     this->edge_follower = this->nh.advertiseService("edge_follower", &RobotTrajectoryInterface::edge_followerCb, this);
     // cartesian path relative
-    this->cartesian_interval = 0.001; // set from dynamic reconfiguration
+    this->cartesian_interval = 0.001;   // set from dynamic reconfiguration
+    this->cartesian_VFactor = 0.2;      // set from dynamic reconfiguration
+    this->cartesian_AccFactor = 0.2;    // set from dynamic reconfiguration
     this->numof_threads = this->pnh.param<int>("motion_planning/numof_threads", 2);
 
     // dynamic reconfiguration server setup
@@ -201,6 +207,9 @@ class RobotTrajectoryInterface {
   void dynamic_reconfigurationCb(robot_interface::RobotInterfaceConfig &config, uint32_t level) {
     ROS_INFO("Reconfigure request: Waypoint interval: [%lf]", config.WaypointInterval);
     this->cartesian_interval = config.WaypointInterval;
+    ROS_INFO("Reconfigure request: Velocity / Acceleration factor: [%lf / %lf]", config.VelocityFactor, config.AccFactor);
+    this->cartesian_VFactor = config.VelocityFactor;
+    this->cartesian_AccFactor = config.AccFactor;
   }
 
   bool io_controllerCb(robot_interface::IO_Control::Request &req, 
@@ -225,7 +234,7 @@ class RobotTrajectoryInterface {
   }
 
   bool edge_followerCb(robot_interface::FollowEdge::Request &req, 
-                      robot_interface::FollowEdge::Response &res) {
+                        robot_interface::FollowEdge::Response &res) {
     // check request validness
     // offset (we impose a minimum 10mm offset) //
     double offset = 0.01;
@@ -374,6 +383,8 @@ class RobotTrajectoryInterface {
     // move to the start-approaching point
     ROS_INFO("[rbt_trj] Approaching start point...");
     this->manipulator.setJointValueTarget(this->start_approach);
+    this->manipulator.setMaxVelocityScalingFactor(1.0);
+    this->manipulator.setMaxAccelerationScalingFactor(1.0);
 
     moveit::planning_interface::MoveGroup::Plan exe_plan;
     if (this->manipulator.plan(exe_plan)) {
@@ -422,8 +433,13 @@ class RobotTrajectoryInterface {
     moveit::planning_interface::MoveGroup::Plan exe_plan_2;
     exe_plan_2.trajectory_ = actions;
     bool success = this->manipulator.execute(exe_plan_2);
-    if (success) {ROS_INFO("[rbt_trj] Done.");}
-    else {ROS_ERROR("[rbt_trj] Failed to move according to the trajectory..."); return;}
+    if (success) {
+      ROS_INFO("[rbt_trj] Done.");
+    }
+    else {
+      ROS_ERROR("[rbt_trj] Failed to move according to the trajectory...");
+      return;
+    }
 
     // move to the ending pose
     {
@@ -434,6 +450,8 @@ class RobotTrajectoryInterface {
     ROS_INFO("[rbt_trj] Returning to initial position...");
     waypoint.position.z = 0.20740845427;  // TODO (get rid of this megic number)
     this->manipulator.setPoseTarget(waypoint);
+    this->manipulator.setMaxVelocityScalingFactor(1.0);
+    this->manipulator.setMaxAccelerationScalingFactor(1.0);
     if (this->manipulator.plan(exe_plan)) {
       // got a plan, now execute
       bool success = this->manipulator.execute(exe_plan);

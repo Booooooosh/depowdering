@@ -3,6 +3,10 @@ Header header
 int32 width
 int32 height
 sensor_msgs/PointCloud2 measurement
+
+float64 scale
+float64 lowerXBoundary
+float64 lowerYBoundary
 ---
 # return a list of points representing the posterior of the location of the part
 bool success

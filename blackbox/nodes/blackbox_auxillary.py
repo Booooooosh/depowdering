@@ -278,10 +278,20 @@ class Auxillary():
     this is where we implement the bayes recursive update
     """
     respond = BayesFilterResponse()
+    # preprocess points if necessary (scale matric, offset, etc...)
+    input_cloud_tmp = list(PointClouds.read_points(req.measurement, field_names = ('x', 'y', 'z'), skip_nans = False))
+    input_cloud = list()
+    if req.scale != 1.0:
+      for point in input_cloud_tmp:
+        # rescale each point
+        input_cloud.append((point[0] * req.scale, point[1] * req.scale, point[2] * req.scale))
+    else:
+      input_cloud = input_cloud_tmp
+
     # initialize if encountered the first frame
     if not self.dynamic_initialized:
       rospy.loginfo("[BF] Dynamic initiallization...")
-      self.prev_frame, self.prev_attr = self._pc_categorizer(PointClouds.read_points(req.measurement, field_names = ('x', 'y', 'z'), skip_nans = False))
+      self.prev_frame, self.prev_attr = self._pc_categorizer(input_cloud)
       self._bf_update_bins(self.prev_frame, self.prev_attr)
       rospy.loginfo("[BF] First frame located @ buildbox[{0}:{1}, {2}:{3}].".format(self.prev_attr[0][0], self.prev_attr[0][1], self.prev_attr[1][0], self.prev_attr[1][1]))
       rospy.loginfo("[BF] Done.")
@@ -293,7 +303,7 @@ class Auxillary():
       return respond
 
     # receive point cloud
-    self.cur_frame, self.cur_attr = self._pc_categorizer(PointClouds.read_points(req.measurement, field_names = ('x', 'y', 'z'), skip_nans = False))
+    self.cur_frame, self.cur_attr = self._pc_categorizer(input_cloud)
     rospy.loginfo("[BF] Current frame located @ buildbox[{0}:{1}, {2}:{3}].".format(self.cur_attr[0][0], self.cur_attr[0][1], self.cur_attr[1][0], self.cur_attr[1][1]))
     resolved_attr = None
     if self.cur_attr != self.prev_attr:

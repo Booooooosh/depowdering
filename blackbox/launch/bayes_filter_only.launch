@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<!-- this launch file will bringup the perception part of the system -->
+<!-- we are using this to test the bayes filter -->
+
+<launch>
+
+  <arg name="headless" default="true" />
+
+  <!-- this will bring up the camera -->
+  <include file="$(find cam_kinect)/launch/cam_kinect.launch" />
+
+  <!-- this will bring up the image processor and bayes filter -->
+  <include file="$(find blackbox)/launch/blackbox.launch" >
+    <arg name="use_bayes_filter" value="true" />
+  </include>
+
+  <!-- do we need RViz at all ? -->
+
+</launch>

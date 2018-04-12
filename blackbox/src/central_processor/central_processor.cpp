@@ -67,6 +67,9 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
     filter.request.width = processed->width;
     filter.request.height = processed->height;
     filter.request.measurement = debug_cloud;
+    // bayes filter uses (mm) while we are operating in (m)
+    // it is our responsibility to tell bayes filter that
+    filter.request.scale = 1000;
 
     if (!this->bayes_filter.call(filter)) {
       ROS_ERROR("[processing] Failed to call BayesFilter. :(");
