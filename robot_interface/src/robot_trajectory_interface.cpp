@@ -55,6 +55,7 @@ class RobotTrajectoryInterface {
   double cartesian_VFactor;
   // cartesian path acceleration factor
   double cartesian_AccFactor;
+
   // cartesian path computation threading
   int numof_threads;
 

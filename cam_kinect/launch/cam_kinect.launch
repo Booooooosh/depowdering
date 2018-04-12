@@ -4,6 +4,7 @@
   <arg name="sim" default="false" />
   <!-- Setup world frame -->
   <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 1.535889742 1.636246174 0 world camera_link 100" />
+
  <!--  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.0157 0.65142 0.911 0 0 3.14159265359 world camera_depth_optical_frame 100" /> -->
   <!-- Launch the kinect ROS driver -->
   <include file="$(find freenect_launch)/launch/freenect.launch" unless="$(arg sim)" />
