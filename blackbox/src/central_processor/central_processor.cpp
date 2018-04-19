@@ -35,6 +35,13 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   tf::transformTFToEigen(cam2rob, transformer);
   pcl::transformPointCloud(*input_cloud, *processed, transformer);
 
+  // point cloud static outlier remover
+  pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+  sor.setInputCloud(processed);
+  sor.setMeanK(50);
+  sor.setStddevMulThresh(1.0);
+  sor.filter(*processed);
+
   // ROI
   processed = this->pcl_passthrough(processed);
   ROS_INFO("[processing] ROI passed: point cloud reduced to [%d x %d].", processed->width, processed->height);
@@ -54,6 +61,18 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
     // since we are in calibration mode, no following processing is needed
     ROS_WARN("[normal_estimator] In normal estimation mode, processing ABORTED.");
     return;
+  }
+
+  // save processed point cloud (if enabled)
+  // this is especially for debugging the bayes filter
+  if (this->save_debug_pc) {
+    // construct the save path
+    std::string save_path = ros::package::getPath("blackbox");
+    save_path += "/data/processed_pc/frame_" + boost::lexical_cast<std::string>(this->seq) + ".pcd";
+
+    // save this frame
+    pcl::io::savePCDFileASCII(save_path, *processed);
+    ROS_INFO("[processing] processed point cloud saved to %s.", save_path.c_str());
   }
 
   // pass through bayes_filter
@@ -88,7 +107,7 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   this->path_from_grid(processed, trajectory);
   ROS_INFO("[processing] Path generated.");
 
-  // send trajectory
+  // send trajectory to manipulator and debug node (if any exists)
   blackbox::Trajectory trj_to_robot;
   trj_to_robot.header.seq = this->seq;
   trj_to_robot.header.frame_id = this->target_frame;
@@ -97,6 +116,8 @@ void CentralProcessor::processCb(const sensor_msgs::PointCloud2ConstPtr &frame) 
   trj_to_robot.relative = true;
   trj_to_robot.robot_dim = 6;
   trj_to_robot.trajectory = trajectory;
+
+  this->_debug_traj.publish(trj_to_robot);
   this->to_robot.publish(trj_to_robot);
   ROS_INFO("[processing] Trajectory sent.");
 

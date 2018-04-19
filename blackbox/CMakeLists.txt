@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   tf
   tf_conversions
+  roslib
   message_generation
   dynamic_reconfigure
 )

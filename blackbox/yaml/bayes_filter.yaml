@@ -8,7 +8,7 @@ decision:
   occ2occ: 0.8
 
   observedGivenFree:
-    mean: -7.0
+    mean: -5.0
     std: 1.5
 
   observedGivenOcc:

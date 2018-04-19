@@ -17,6 +17,8 @@
   <!-- By default, we are not using bayes filter during processing -->
   <!-- the bayes filter is used for localization -->
   <arg name="use_bayes_filter" default="false" />
+  <!-- By default, we won't visualize the trajectory -->
+  <arg name="use_trajectory_visualizer" default="false" />
 
   <!-- Startup the denso controller -->
   <arg name="robot_ip" default="192.168.1.2" />
@@ -35,6 +37,7 @@
     <include file="$(find cam_kinect)/launch/cam_kinect.launch" />
     <include file="$(find blackbox)/launch/blackbox.launch" >
       <arg name="use_bayes_filter" value="$(arg use_bayes_filter)" />
+      <arg name="use_trajectory_visualizer" value="$(arg use_trajectory_visualizer)" />
     </include>
   </group>
 

@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <!-- By default, we are not using bayes filter during processing -->
+  <!-- the bayes filter is used for localization -->
+  <arg name="use_bayes_filter" default="false" />
+
+  <!-- By default, we are not using simulated camera feedback -->
+  <arg name="use_sim_camera" default="false" />
+
+  <!-- By default, we are not showing the reaultant trajectory -->
+  <arg name="use_trajectory_visualizer" default="false" />
+
+  <!-- Run the kinect sensor -->
+  <include file="$(find cam_kinect)/launch/cam_kinect.launch" unless="$(arg use_sim_camera)" />
+  <include file="$(find cam_kinect)/launch/cam_playback.launch" if="$(arg use_sim_camera)" />
+
+  <!-- Run the point cloud processing node -->
+  <include file="$(find blackbox)/launch/blackbox.launch" >
+    <arg name="use_bayes_filter" value="$(arg use_bayes_filter)" />
+  </include>
+
+  <!-- Run trajectory visualizer if desired -->
+  <group if="$(arg use_trajectory_visualizer)">
+    <node name="trajectory_visualizer" pkg="blackbox" type="show_trajectory.py" required="false" respawn="false" output="screen" />
+  </group>
+
+</launch>

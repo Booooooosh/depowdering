@@ -32,6 +32,7 @@ find_package(Boost REQUIRED)
 add_service_files(
   FILES
   FetchOneFrame.srv
+  PlaybackFrame.srv
   SendPseudoCloud.srv
   SaveCloud.srv
 )

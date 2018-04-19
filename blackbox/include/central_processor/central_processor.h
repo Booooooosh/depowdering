@@ -6,18 +6,22 @@
  */
 #include <ros/ros.h>
 #include <ros/console.h>
+#include <ros/package.h>
 #include <dynamic_reconfigure/server.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf/transform_listener.h>
 #include <tf_conversions/tf_eigen.h>
 
+#include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/common/transforms.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
 #include <boost/thread/mutex.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include <vector>
 #include <algorithm>
@@ -37,7 +41,7 @@ class CentralProcessor {
  private:
   ros::NodeHandle nh, pnh;
   ros::Subscriber cam_feedback;
-  ros::Publisher to_robot, _debug_window;
+  ros::Publisher to_robot, _debug_window, _debug_traj;
 
   tf::TransformListener tf_listener;
   std::string target_frame;
@@ -55,6 +59,7 @@ class CentralProcessor {
 
   // camera position and orientation calibration
   bool normal_estimator;
+  bool save_debug_pc;
 
   PointCloudPtr last_frame;
   unsigned int seq;
@@ -106,6 +111,7 @@ class CentralProcessor {
     std::string pub_topic_name = this->pnh.param<std::string>("ros_node/pub_topic_name", "robot_trajectory");
     this->to_robot = this->nh.advertise<blackbox::Trajectory>(pub_topic_name, 1);
     this->_debug_window = this->nh.advertise<sensor_msgs::PointCloud2>("debug", 1);
+    this->_debug_traj = this->nh.advertise<blackbox::Trajectory>("debug_traj", 1);
 
     // reconfiguration //
     dynamic_reconfigure::Server<blackbox::BlackboxConfig>::CallbackType funcHd;
@@ -167,6 +173,13 @@ class CentralProcessor {
     } else {
       ROS_INFO("Reconfigure request: normal_estimator disabled.");
       this->normal_estimator = config.enable_normal_estimator;
+    }
+
+    if ((bool)config.save_processed_point_cloud) {
+      ROS_INFO("Reconfigure request: save processed point cloud enabled.");
+      this->save_debug_pc = config.save_processed_point_cloud;
+    } else {
+      ROS_INFO("Reconfigure request: save processed point cloud disabled.");
     }
   }
 };

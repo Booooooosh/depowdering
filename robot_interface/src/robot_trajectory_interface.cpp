@@ -68,6 +68,9 @@ class RobotTrajectoryInterface {
   ros::Publisher  io_writter;
   ros::Subscriber io_reader;
 
+  // ros service client, for calling next frame
+  ros::ServiceClient next_frame;
+
   // moveit interface
   moveit::planning_interface::MoveGroup manipulator;
   moveit::planning_interface::PlanningSceneInterface planning_scene;
@@ -78,6 +81,11 @@ class RobotTrajectoryInterface {
 
   // edge follower
   double bb_edge_len;
+
+  // sequence
+  bool inf_loop;
+  int remaining_iteration;
+  int seq;
 
   // dynamic reconfiguration
   dynamic_reconfigure::Server<robot_interface::RobotInterfaceConfig> reconfig_server;
@@ -97,6 +105,7 @@ class RobotTrajectoryInterface {
     this->io_controller = this->nh.advertiseService("io_controller", &RobotTrajectoryInterface::io_controllerCb, this);
     this->bb_edge_len = this->pnh.param<double>("general/buildbox_edge_len", 0.3);
     this->edge_follower = this->nh.advertiseService("edge_follower", &RobotTrajectoryInterface::edge_followerCb, this);
+    this->next_frame = this->nh.serviceClient<cam_kinect::FetchOneFrame>("/kinect_feedback/next_frame");
     // cartesian path relative
     this->cartesian_interval = 0.001;   // set from dynamic reconfiguration
     this->cartesian_VFactor = 0.2;      // set from dynamic reconfiguration
@@ -202,6 +211,7 @@ class RobotTrajectoryInterface {
     ROS_INFO("[rbt_trj] ===================================");
 
     // finished
+    this->seq = 0;
     ROS_INFO("[rbt_trj] Done.");
   }
 
@@ -211,6 +221,32 @@ class RobotTrajectoryInterface {
     ROS_INFO("Reconfigure request: Velocity / Acceleration factor: [%lf / %lf]", config.VelocityFactor, config.AccFactor);
     this->cartesian_VFactor = config.VelocityFactor;
     this->cartesian_AccFactor = config.AccFactor;
+
+    ROS_INFO("Reconfigure request: robot will run consecutively for %d iterations.", config.Iter);
+    this->remaining_iteration = config.Iter;
+
+    if ((bool)config.InfLoop) {
+      ROS_WARN("Reconfigure request: system will run consecutively!");
+      this->inf_loop = config.InfLoop;
+    } else {
+      ROS_WARN("Reconfigure request: system is in debug mode.");
+      this->inf_loop = false;
+    }
+  }
+
+  bool do_next_layer(void) {
+    // conpose request
+    cam_kinect::FetchOneFrame srv;
+    srv.request.cycle_done = true;
+
+    // call service
+    if (this->next_frame.exists()) {
+      this->next_frame.call(srv);
+      return true;
+    } else {
+      // falied to call service
+      return false;
+    }
   }
 
   bool io_controllerCb(robot_interface::IO_Control::Request &req, 
@@ -473,8 +509,32 @@ class RobotTrajectoryInterface {
       }
     }
     ROS_INFO("[rbt_trj] Done.");
-    ROS_INFO("[rbt_trj] Layer Done. Waiting for the next frame...");
 
+    // see if we should call for the next frame
+    if (this->inf_loop) {
+      ROS_WARN("[rbt_trj] In inf_loop, calling for next layer...");
+      // call service
+      if (!this->do_next_layer()) {
+        ROS_ERROR("[rbt_trj] Failed to call the service to provide next frame.You can call manually to resume.");
+      }
+    } else {
+      // OK, we are not in inf_loop mode
+      this->remaining_iteration -= 1;
+      if (this->remaining_iteration > 0) {
+        // cal service
+        ROS_INFO("[rbt_trj] Current layer done (%d left). Calling for next frame.", this->remaining_iteration);
+        if (!this->do_next_layer()) {
+          ROS_ERROR("[rbt_trj] Failed to call the service to provide next frame. You can call manually to resume.");
+        }
+      } else {
+        // reset the remaining iterations
+        this->remaining_iteration = 1;
+        ROS_INFO("[rbt_trj] Iterations done. Waiting for next frame...");
+      }
+    }
+
+    // update the sequence
+    this->seq += 1;
     return;
   }
 

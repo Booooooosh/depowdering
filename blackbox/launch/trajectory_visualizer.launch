@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<!-- this launch file will bringup the perception part of the system -->
+<!-- we are using this to test the bayes filter -->
+
+<launch>
+
+  <arg name="headless" default="true" />
+
+  <!-- this will bring up the camera -->
+  <include file="$(find cam_kinect)/launch/cam_kinect.launch" />
+
+  <!-- this will bring up the image processor -->
+  <include file="$(find blackbox)/launch/blackbox.launch" />
+
+  <!-- bringup the trajectory visualizer node -->
+  <node name="trajectory_visualizer" pkg="blackbox" type="show_trajectory.py" required="false" respawn="false" output="screen" />
+
+  <!-- do we need RViz at all ? -->
+
+</launch>

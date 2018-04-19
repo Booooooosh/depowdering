@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <!-- Setup world frame -->
+  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 1.535889742 1.636246174 0 world camera_link 100" />
+
+  <!-- Launch kinect_cam node -->
+  <node name="kinect_grabber" pkg="cam_kinect" type="cam_kinect" required="true" output="screen" >
+    <rosparam command="load" file="$(find cam_kinect)/yaml/cam_kinect.yaml" />
+  </node>
+
+</launch>

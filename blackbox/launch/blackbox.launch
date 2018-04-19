@@ -1,7 +1,10 @@
 <?xml version="1.0"?>
 
 <launch>
+  <!-- By default, we are not using bayes filter -->
   <arg name="use_bayes_filter" default="false" />
+  <!-- By default, we are showing each generated trajectory -->
+  <arg name="use_trajectory_visualizer" default="true" />
 
   <!-- Setup robot/work frame -->
   <!-- <node pkg="tf" type="static_transform_publisher" name="work_frame_broadcaster" args="-0.126 0.156 0.80 0 0 3.14159265359 camera_depth_optical_frame robot_work_frame 100" /> -->
@@ -14,5 +17,8 @@
 
   <!-- launch the bayes filter -->
   <include file="$(find blackbox)/launch/blackbox_auxillary.launch" if="$(arg use_bayes_filter)" />
+
+  <!-- visualize each generated trajectory -->
+  <node name="trajectory_visualizer" pkg="blackbox" type="show_trajectory.py" required="false" respawn="false" output="screen" if="$(arg use_trajectory_visualizer)" />
 
 </launch>

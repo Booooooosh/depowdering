@@ -14,6 +14,7 @@
 
 #include <sensor_msgs/PointCloud2.h>
 #include <cam_kinect/FetchOneFrame.h>
+#include <cam_kinect/PlaybackFrame.h>
 #include <cam_kinect/SaveCloud.h>
 
 #include <boost/thread/mutex.hpp>
@@ -24,6 +25,7 @@ class CamKinect {
   ros::Subscriber kinect_frame_cont;
   ros::Publisher kinect_frame_discrete;
   ros::ServiceServer next_frame, save_cloud;
+  ros::ServiceServer read_point_cloud;
 
   std::string frame_id;
   unsigned int seq;
@@ -43,6 +45,7 @@ class CamKinect {
 
     std::string srv_name = this->pnh.param<std::string>("ack_service_name", "next_frame");
     this->next_frame = this->nh.advertiseService(srv_name, &CamKinect::acknowledgeCb, this);
+    this->read_point_cloud = this->nh.advertiseService("playback", &CamKinect::playbackCb, this);
 
     this->save_cloud = this->nh.advertiseService("save_cloud", &CamKinect::save_cloudCb, this);
     
@@ -76,6 +79,43 @@ class CamKinect {
       res.success = false;
       res.reason = "Previous iteration is still under processing...";
     }
+    return true;
+  }
+
+  bool playbackCb(cam_kinect::PlaybackFrame::Request &req, 
+                  cam_kinect::PlaybackFrame::Response &res) {
+    // check the request validness
+    if (!req.file_name.length()) {
+      ROS_ERROR("[playbackCb] No file name indicated.");
+      res.success = false;
+      res.reason = "No file name specified.";
+      return true;
+    }
+
+    // construct file path
+    std::string pcd_full_path = ros::package::getPath("blackbox");
+    pcd_full_path += "/data/point_cloud_display/" + req.file_name + ".pcd";
+
+    // load point cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr history_pc(new pcl::PointCloud<pcl::PointXYZ>);
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_full_path, *history_pc) == -1) {
+      // failed to read from file
+      ROS_ERROR("[playbackCb] Failed to read from file, make sure that the file exists.");
+      res.success = false;
+      res.reason = "Failed to read from file, make sure that the file exists.";
+      return true;
+    }
+
+    // transfer point cloud into ROSMsg and publish
+    sensor_msgs::PointCloud2 history_frame;
+    pcl::toROSMsg(*history_pc, history_frame);
+    history_frame.header.frame_id = "robot_work_frame";
+    history_frame.header.stamp = ros::Time::now();
+
+    this->kinect_frame_discrete.publish(history_frame);
+    res.success = true;
+    res.reason = "Done.";
+
     return true;
   }
 
