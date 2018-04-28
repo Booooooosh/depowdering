@@ -3,7 +3,15 @@
 <launch>
   <arg name="sim" default="false" />
   <!-- Setup world frame -->
-  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 1.535889742 1.636246174 0 world camera_link 100" />
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 1.570796326794897 1.570796326794897 0 world camera_link 100" /> -->
+
+<!--   <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 0.513318330346 -0.511102247596 -0.481006753829 -0.49387375614 world camera_link 100" /> -->
+
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 -0.506640964602 0.518090187021 0.484678645357 0.489881722291 world camera_link 100" /> -->
+
+  <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.0103175702251 0.682877954609 0.911 -0.508801930262 0.513811449501 0.487580416758 0.48926856359 world camera_link 100" />
+
+  <!-- <node pkg="tf" type="static_transform_publisher" name="world_frame_broadcaster" args="-0.028268 0.69142 0.911 1.535889742 1.636246174 0 world camera_link 100" /> -->
 
   <!-- Launch the kinect ROS driver -->
   <include file="$(find freenect_launch)/launch/freenect.launch" unless="$(arg sim)" />

@@ -1,0 +1,8 @@
+# we don't need anything for request as
+# all the parameters are specified within
+# the code, see ar_marker_filter.py
+std_msgs/Empty press_enter
+---
+# the response would be a string message
+bool success
+string reason

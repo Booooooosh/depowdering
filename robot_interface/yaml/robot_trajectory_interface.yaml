@@ -10,8 +10,8 @@ approaching_points:
 
 workspace:
   ref_frame: "robot_work_frame"
-  # meshes:
-  #   buildbox: "package://robot_interface/meshes/buildbox.STL"
+  meshes:
+    buildbox: "package://robot_interface/meshes/buildbox.STL"
 
 motion_planning:
   numof_threads: 2

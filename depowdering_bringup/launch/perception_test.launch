@@ -8,6 +8,8 @@
 
   <!-- By default, we are not using simulated camera feedback -->
   <arg name="use_sim_camera" default="false" />
+  <!-- By default, we are not using AR marker to calibrate the camera -->
+  <arg name="camera_calibration" default="false" />
 
   <!-- By default, we are not showing the reaultant trajectory -->
   <arg name="use_trajectory_visualizer" default="false" />
@@ -15,6 +17,16 @@
   <!-- Run the kinect sensor -->
   <include file="$(find cam_kinect)/launch/cam_kinect.launch" unless="$(arg use_sim_camera)" />
   <include file="$(find cam_kinect)/launch/cam_playback.launch" if="$(arg use_sim_camera)" />
+  <!-- Run the AR marker detector-->
+  <group if="$(arg camera_calibration)" >
+    <include file="$(find ar_track_alvar)/launch/pr2_indiv.launch" >
+      <arg name="cam_image_topic" value="/camera/depth_registered/points" />
+      <arg name="cam_info_topic" value="/camera/rgb/camera_info" />
+      <arg name="output_frame" value="/world" />
+    </include>
+
+    <node name="alavr_filters" pkg="cam_kinect" type="ar_marker_filter.py" required="false" respawn="false" output="screen" />
+  </group>
 
   <!-- Run the point cloud processing node -->
   <include file="$(find blackbox)/launch/blackbox.launch" >

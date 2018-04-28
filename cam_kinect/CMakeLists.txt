@@ -31,6 +31,7 @@ find_package(Boost REQUIRED)
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
+  CamCalibrate.srv
   FetchOneFrame.srv
   PlaybackFrame.srv
   SendPseudoCloud.srv
